@@ -1,0 +1,204 @@
+---
+title: "homework-week-6"
+author: "Ingrid Lundeen"
+date: "October 17, 2016"
+output: html_document
+---
+
+#Using a new .Rmd file and pushing both the markdown and knitted .html file to a new repository named "homework-week-6" on your GitHub page, answer the following questions:
+
+#[1] Write a simple R function, Z.prop.test(), that can perform one- or two-sample Z-tests for proportion data, using the following guidelines.
+
+###Your function should take the following arguments: p1 and n1 (no default) to pose as the estimated proportion and sample size (i.e., based on your sample data); p2 and n2 (both defaulting to NULL) that contain a second sample's proportion and sample size data in the event of a two-sample test; p0 (no default) as the expected value for the population proportion; and alternative (default "two.sided") and conf.level (default 0.95), to be used in the same way as in the function t.test().
+
+###When conducting a two-sample test, it should be p1 that is tested as being smaller or larger than p2 when alternative="less" or alternative="greater", the same as in the use of x and y in the function t.test().
+
+###The function should perform a one-sample Z-test using p1, n1, and p0 if either p2 or n2 (or both) is NULL.
+
+###The function should return a list containing the members Z (the test statistic), P (the appropriate p-value), and CI (the two-sided CI with respect to confidence level).
+
+```{r}
+
+
+Z.prop.test <- function(P1,N1,P2=NULL,N2=NULL,P0,alternative="two.sided",conf.level=0.95){ #specifying that arguments the function is going to use and specifying that by default, P2 and N2 should be null
+  if(is.null(P2)||is.null(N2)){ #saying that if P2 OR N2 is NULL -  the function will do the following
+    cat("One-sample Z-test.\n")
+    if(P1*N1<=5||N1*(1-P1)<=5){ #checking to make sure that the sample size is large enough to assume normality in the data
+      warning("WARNING - Probably not a normal distribution") #what the function will spit out if either of those equations tested is less than or equal to five
+    }
+    Z <- (P1-P0)/sqrt(P0*(1-P0)/N1) #producing a z-statistic for a one sample z-test
+    CI <- (P1)+c(-1,1)*qnorm(conf.level+(1-conf.level)/2)*sqrt(P0*(1-P0)/N1) #producing a confidence interval for a one sample z-test. 
+  } else { #bringing it back to that initial if...else statement - if P2 and N2 are NOT null. 
+    cat("Two-sample Z-test.\n")
+    if(P1*N1<=5||N1*(1-P1)<=5||P2*N2<=5||N2*(1-N2)<=5){ #testing for the appropriate sample size to assume normality
+      warning("WARNING - Probably not a normal distribution") #what R will spit out if the sample isn't large enough to assume normality - although it will still run.
+    }
+#The function should contain a check for the rules of thumb we have talked about ($n * p > 5$ and $n * (1-p) >5$) to ensure the validity of assuming the normal distribution in both the one- and two-sample settings. If this is violated, the function should still complete but it should also print an appropriate warning message.
+    P.STAR <- (P1*N1+P2*N2)/(N1+N2) #calculating the pooled proportion so we can calculate a 2-sample z-test
+    Z <- (P1-P2-P0)/sqrt(P.STAR*(1-P.STAR)*(1/N1+1/N2)) #calculating the z-statistic for a 2-sample z-test
+    CI <- sort((P1-P2)+c(-1,1)*qnorm(conf.level+(1-conf.level)/2)*sqrt(P.STAR*(1-P.STAR)*(1/N1+1/N2))) #
+  }
+ 
+  if(alternative=="greater"){ #set the argument to default to 2 sided so if we set it as greater instead than we want to calculate it this way - 
+    P <- pnorm(Z, lower.tail=FALSE) 
+  } else if(alternative =="less"){ #if we set it to less  - calculate P this way
+    P <- pnorm(Z, lower.tail=TRUE)
+    } else if(alternative=="two.sided"){ #if it defaults on twosided we calculate it this way
+     if (Z > 0) {P<-2*pnorm(z,lower.tail=FALSE)}
+            if (Z < 0) {P<-2*pnorm(z,lower.tail=TRUE)}
+    }
+  return(list(Z=Z,P=P,CI=CI)) #asking it to return a list with the z-statistic, the p-value, and the associated confidence intervals
+}
+
+
+```
+
+
+#[2] The dataset from Kamilar and Cooper has in it a large number of variables related to life history and body size. For this exercise, the end aim is to fit a simple linear regression model to predict longevity ("MaxLongevity_m") measured in months from species' brain size ("Brain_Size_Species_Mean") measured in grams. Do the following for both longevity~brain size and log(longevity)~log(brain size).
+```{r}
+library(curl)
+library(ggplot2)
+f <- curl("https://raw.githubusercontent.com/difiore/ADA2016/master/KamilarAndCooperData.csv")
+d <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(d)
+
+m <- lm(MaxLongevity_m ~ Brain_Size_Species_Mean , data = d)
+m
+summary(m)
+
+logm<-lm(log(MaxLongevity_m)~log(Brain_Size_Species_Mean), data=d)
+logm
+summary(logm)
+```
+###Fit the regression model and, using {ggplot2}, produce a scatterplot with the fitted line superimposed upon the data. Append the the fitted model equation to your plot (HINT: use the function geom_text()).
+```{r}
+
+plotM<-ggplot(d, aes(x=Brain_Size_Species_Mean, y=MaxLongevity_m)) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm, se=FALSE)   # Add linear regression line w/o confidence lines 
+plotM                             
+#use a function that turns linear model information into equation
+lm_eqn = function(m) { 
+
+  l <- list(a = format(coef(m)[1], digits = 2),
+      b = format(abs(coef(m)[2]), digits = 2),
+      r2 = format(summary(m)$r.squared, digits = 3));
+
+  if (coef(m)[2] >= 0)  {
+    eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2,l)
+  } else {
+    eq <- substitute(italic(y) == a - b %.% italic(x)*","~~italic(r)^2~"="~r2,l)    
+  }
+
+  as.character(as.expression(eq));                 
+}
+plotM1 <- plotM + geom_text(aes(x = 400, y = 250, label = lm_eqn(lm(d$MaxLongevity_m ~ d$Brain_Size_Species_Mean))), parse = TRUE)
+plotM1
+
+logplotM<-ggplot(d, aes(x=log(Brain_Size_Species_Mean), y=log(MaxLongevity_m))) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm, se=FALSE)   # Add linear regression line w/o confidence lines
+logplotM           
+logplotM1<-logplotM+geom_text(aes(x = 5, y = 5, label = lm_eqn(lm(d$MaxLongevity_m ~ d$Brain_Size_Species_Mean))), parse = TRUE)
+logplotM1
+
+```
+###Identify and interpret the point estimate of the slope ($\beta_1$), as well as the outcome of the test associated with the hypotheses H0: $\beta_1$ = 0; HA: $\beta_1$ ≠ 0. Also, find a 90 percent CI for the slope ($\beta_1$) parameter.
+```{r}
+summary(m)
+newdata1 = data.frame(Brain_Size_Species_Mean=248.95)
+mint<-predict(m, newdata1, interval="confidence", level=0.90) 
+
+```
+##The point estimate of the slope for the non-log-transformed regression shows that on average, with each 1 unit increase in brain size, the max longevity increases by 1.22. Additionally, since the p-value is well below 0.05, we could reject the null hypothesis that beta_1=0. 
+```{r}
+summary(logm)
+newdata2 = data.frame(Brain_Size_Species_Mean=4.87)
+logmint<-predict(logm, newdata2,interval="confidence", level=0.90)
+```
+##The point estimate of the slope for the log-transformed regression shows that on average, with each 1 unit increase in brain size, the max longevity increases by 0.234
+
+
+
+###Using your model, add lines for the 90 percent confidence and prediction interval bands on the plot and add a legend to differentiate between the lines.
+```{r}
+#non-log-transformed data
+m <- lm(data = d, MaxLongevity_m ~ Brain_Size_Species_Mean)
+h_hat <- predict(m, newdata = data.frame(Brain_Size_Species_Mean = d$Brain_Size_Species_Mean))
+df <- data.frame(cbind(d$Brain_Size_Species_Mean, d$MaxLongevity_m, h_hat))
+names(df) <- c("x", "y", "yhat")
+head(df)
+ci <- predict(m, newdata = data.frame(Brain_Size_Species_Mean = d$Brain_Size_Species_Mean), interval = "confidence", level = 0.90)  # for a vector of values
+head(ci)
+df <- cbind(df, ci)
+names(df) <- c("x", "y", "yhat", "CIfit", "CIlwr", "CIupr")
+head(df)
+pi <- predict(m, newdata = data.frame(Brain_Size_Species_Mean = d$Brain_Size_Species_Mean), interval = "prediction", 
+     level = 0.90)  # for a vector of values
+head(pi)
+df <- cbind(df, pi)
+names(df) <- c("x", "y", "yhat", "CIfit", "CIlwr", "CIupr", "PIfit", "PIlwr", 
+     "PIupr")
+head(df)
+
+
+plotm <- ggplot(data = df, aes(x = x, y = y)) + 
+  geom_point(alpha = 1/2) +
+  ggtitle("Confidence and Predictive intervals for Non-log-transformed") +
+  geom_line(aes(x = x, y = CIfit, colour = "Best_fit")) + 
+  geom_line(aes(x = x, y = CIlwr, colour = "Ninety_percent_CI")) + 
+  geom_line(aes(x = x, y = CIupr, colour = "Ninety_percent_CI")) +
+  geom_line(aes(x = x, y = PIfit, colour = "Best_fit")) + 
+  geom_line(aes(x = x, y = PIlwr, colour = "Ninety_percent_PI")) + 
+  geom_line(aes(x = x, y = PIupr, colour = "Ninety_percent_PI")) + scale_colour_manual(name="Line Color Key",values=c(Best_fit="firebrick3",Ninety_percent_CI="mediumpurple3", Ninety_percent_PI="steelblue3"))
+plotm
+
+
+#Log-transformed data
+logm <- lm(data = d, log(MaxLongevity_m) ~ log(Brain_Size_Species_Mean))
+lh_hat <- predict(logm, newdata = data.frame(Brain_Size_Species_Mean = log(d$Brain_Size_Species_Mean)))
+ldf <- data.frame(cbind(log(d$Brain_Size_Species_Mean), log(d$MaxLongevity_m), lh_hat))
+names(ldf) <- c("x", "y", "yhat")
+
+lci <- predict(logm, newdata = data.frame(Brain_Size_Species_Mean = d$Brain_Size_Species_Mean), interval = "confidence", level = 0.90) 
+# for a vector of values
+head(lci)
+ldf <- cbind(ldf, lci)
+names(ldf) <- c("x", "y", "yhat", "CIfit", "CIlwr", "CIupr")
+
+lpi <- predict(logm, newdata = data.frame(Brain_Size_Species_Mean = d$Brain_Size_Species_Mean), interval = "prediction", level = 0.90)  # for a vector of values
+head(lpi)
+ldf <- cbind(ldf, lpi)
+names(ldf) <- c("x", "y", "yhat", "CIfit", "CIlwr", "CIupr", "PIfit", "PIlwr", 
+     "PIupr")
+head(ldf)
+
+plotlm <- ggplot(data = ldf, aes(x = x, y = y)) + 
+  geom_point(alpha = 1/2) +
+  ggtitle("Confidence & Predictive Intervals for Log-Transformed Data") +
+  geom_line(aes(x = x, y = CIfit, colour = "Best_Fit")) + 
+  geom_line(aes(x = x, y = CIlwr, colour = "Ninety_percent_CI")) + 
+  geom_line(aes(x = x, y = CIupr, colour = "Ninety_percent_CI")) +
+  geom_line(aes(x = x, y = PIfit, colour = "Best_Fit")) + 
+  geom_line(aes(x = x, y = PIlwr, colour = "Ninety_percent_PI")) + 
+  geom_line(aes(x = x, y = PIupr, colour = "Ninety_percent_PI")) + scale_colour_manual(name="Line Color Key",values=c(Best_Fit="firebrick3",Ninety_percent_CI="mediumpurple3", Ninety_percent_PI="steelblue3"))
+plotlm
+
+
+```
+
+###Produce a point estimate and associated 90 percent PI for the longevity of a species whose brain weight is 800 gm. Do you trust the model to predict observations accurately for this value of the explanatory variable? Why or why not?
+#Looking at your two models, which do you think is better? Why
+
+
+```{r}
+#generate point estimate and 90% prediction intervals for normal data
+predict(m, newdata=data.frame(Brain_Size_Species_Mean=800), interval="prediction", level=0.90)
+
+
+#generate point estimate and 90% prediction intervals for log-transformed data
+predict(logm, newdata=data.frame(Brain_Size_Species_Mean=log(800)), interval="prediction", level=0.90)
+
+```
+## Neither the regular or r-transformed data have high coefficients of correlation suggesting that neither are very informative in predicting max longevity based on brain size. 
+#Between the two of the models, the log-transformed model seems like it would produce more reliable results across a broad sample. the normal data model has a much wider confidence interval at higher brain sizes. The log transformed data has much more uniform confidence intervals across data 
